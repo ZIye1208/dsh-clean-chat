@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { registerRoutes } from '../lib/host/routes.js';
+import { registerRoutes, resetModelCache } from '../lib/host/routes.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
@@ -58,6 +58,12 @@ function fakeCtx({ chunks = [], providers, selection } = {}) {
   const ctx = {
     llm: {
       listProviders: () => providers ?? [{ id: 'fake-provider', models: [{ id: 'fake-model' }] }],
+      listModels: async (providerId) => {
+        const found = (providers ?? [{ id: 'fake-provider', models: [{ id: 'fake-model' }] }]).find(
+          (item) => item.id === providerId,
+        );
+        return (found?.models ?? []).map((model) => ({ id: model.id, label: model.id }));
+      },
       stream: (options) => {
         ctx.lastStreamOptions = options;
         return (async function* () {
@@ -100,6 +106,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
 // ── 2. ping ────────────────────────────────────────────────────────
 {
   const { ctx, routes } = fakeCtx();
+  resetModelCache();
   registerRoutes(ctx);
   check('注册了 3 条路由', [...routes.keys()].sort(), [
     '/clean-chat/api/chat',
@@ -116,6 +123,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
     providers: [{ id: 'p1', models: [{ id: 'm1' }, { id: 'm2' }] }],
     selection: { provider: 'p1', model: 'm2' },
   });
+  resetModelCache();
   registerRoutes(ctx);
   const out = await hit(routes.get('/clean-chat/api/models'), fakeReq({}, 'GET'));
   const payload = JSON.parse(out.body);
@@ -134,6 +142,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
       { type: 'finish', reason: { kind: 'done' } },
     ],
   });
+  resetModelCache();
   registerRoutes(ctx);
   const out = await hit(
     routes.get('/clean-chat/api/chat'),
@@ -156,6 +165,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   const { ctx, routes } = fakeCtx({
     chunks: [{ type: 'finish', reason: { kind: 'error', failure: { code: 'AUTH', message: '密钥无效' } } }],
   });
+  resetModelCache();
   registerRoutes(ctx);
   const out = await hit(
     routes.get('/clean-chat/api/chat'),
@@ -168,6 +178,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
 // ── 6. chat：参数校验 ──────────────────────────────────────────────
 {
   const { ctx, routes } = fakeCtx();
+  resetModelCache();
   registerRoutes(ctx);
   const empty = await hit(routes.get('/clean-chat/api/chat'), fakeReq({ messages: [] }));
   check('空消息 → 400', empty.status, 400);
@@ -190,6 +201,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
 // ── 7. 没有可用模型 ────────────────────────────────────────────────
 {
   const { ctx, routes } = fakeCtx({ providers: [] });
+  resetModelCache();
   registerRoutes(ctx);
   const out = await hit(
     routes.get('/clean-chat/api/chat'),

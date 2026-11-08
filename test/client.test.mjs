@@ -89,5 +89,32 @@ check('缺 betterSidebar 不抛错', threw, '');
 // 客户端只允许依赖 react
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
 
+// ── 纯函数：数字格式 ────────────────────────────────────────────────
+const { fmtTok, usageOf, renderMarkdown } = mod.__internals;
+check('fmtTok 999', fmtTok(999), '999');
+check('fmtTok 1212', fmtTok(1212), '1.2K');
+check('fmtTok 142000', fmtTok(142000), '142K');
+check('fmtTok 1500000', fmtTok(1500000), '1.5M');
+check('fmtTok 0', fmtTok(0), '0');
+
+// ── 纯函数：usage 折算 ─────────────────────────────────────────────
+const u = usageOf({ inputTokens: 1212, outputTokens: 828, cacheReadTokens: 1200 });
+check('usage 总量', u.total, 2040);
+check('usage 未缓存输入', u.uncached, 12);
+check('usage 命中率', Math.round(u.hitRate * 100), 99);
+check('usage 空值', usageOf(null), null);
+
+// ── 纯函数：Markdown 块级结构 ──────────────────────────────────────
+const tree = renderMarkdown('# 标题\n\n第一段**粗**和`码`。\n\n- a\n- b\n\n```js\nconst x = 1;\n```\n', 'k');
+const kinds = tree.map((node) => node.type);
+/** 把「一个数组子节点」摊平（假 React 不展开数组，真 React 会）。 */
+const flat = (node) => ([]).concat(...node.children.map((child) => (Array.isArray(child) ? child : [child])));
+check('markdown 块序列', kinds, ['h3', 'p', 'ul', 'pre']);
+check('列表两项', flat(tree[2]).length, 2);
+check('代码块内容', tree[3].children[0].children[0], 'const x = 1;');
+check('粗体节点', flat(tree[1]).some((child) => child && child.type === 'strong'), true);
+check('行内码节点', flat(tree[1]).some((child) => child && child.type === 'code'), true);
+check('空文本不炸', renderMarkdown('', 'z').length, 0);
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);
