@@ -145,5 +145,67 @@ check('粗体节点', flat(tree[1]).some((child) => child && child.type === 'str
 check('行内码节点', flat(tree[1]).some((child) => child && child.type === 'code'), true);
 check('空文本不炸', renderMarkdown('', 'z').length, 0);
 
+// ── 设置持久化：宿主写盘为准，localStorage 只当缓存 ─────────────────
+{
+  const internals = mod.__internals;
+  const calls = [];
+  const saved = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, method: (init && init.method) || 'GET', body: init && init.body });
+    if (init && init.method === 'POST') {
+      return { ok: true, json: async () => ({ ok: true, settings: JSON.parse(init.body) }) };
+    }
+    return { ok: true, json: async () => ({ ok: true, settings: { system: '远程提示', provider: 'p2', model: 'm3' } }) };
+  };
+  const realLocalStorage = globalThis.window.localStorage;
+  globalThis.window.localStorage = {
+    getItem: () => null,
+    setItem: (key, value) => saved.push({ key, value }),
+  };
+
+  check('导出了 store', typeof internals.store, 'object');
+
+  // 启动时从宿主拉设置
+  internals.hydrateSettings();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  check('hydrate 打到 /settings', calls[0]?.url, '/clean-chat/api/settings');
+  check('hydrate 用 GET', calls[0]?.method, 'GET');
+  check('拉回来的设置生效', internals.store.settings.model, 'm3');
+  check('拉回来也写进缓存', saved.length > 0, true);
+
+  // 改设置 → 防抖后 POST 到宿主（不是只写 localStorage）
+  const before = calls.filter((call) => call.method === 'POST').length;
+  internals.store.setSettings({ model: 'm9' });
+  await new Promise((resolve) => setTimeout(resolve, 520));
+  const posts = calls.filter((call) => call.method === 'POST');
+  check('改设置 POST 了一次', posts.length - before, 1);
+  check('POST 里带新模型', JSON.parse(posts.at(-1).body).model, 'm9');
+  check('每次改动都留了本地缓存', saved.some((item) => item.value.includes('m9')), true);
+
+  // 宿主还是空的（老版本升级上来）：把本地缓存迁上去
+  globalThis.window.localStorage = {
+    getItem: () => JSON.stringify({ system: '老提示', provider: 'p9', model: 'm8' }),
+    setItem: () => {},
+  };
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, method: (init && init.method) || 'GET', body: init && init.body });
+    if (init && init.method === 'POST') {
+      return { ok: true, json: async () => ({ ok: true, settings: JSON.parse(init.body) }) };
+    }
+    return { ok: true, json: async () => ({ ok: true, settings: {} }) };
+  };
+  const migratedBefore = calls.filter((call) => call.method === 'POST').length;
+  internals.resetSettingsState(); // 上一段改过设置，清掉 dirty 才能验证迁移
+  internals.store.settings = { system: '老提示', provider: 'p9', model: 'm8' };
+  internals.hydrateSettings();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const migrated = calls.filter((call) => call.method === 'POST');
+  check('宿主为空时迁移一次', migrated.length - migratedBefore, 1);
+  check('迁移内容带旧模型', JSON.parse(migrated.at(-1).body).model, 'm8');
+
+  globalThis.window.localStorage = realLocalStorage;
+  delete globalThis.fetch;
+}
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- **修**：设置（系统提示 / provider / model）现在存在宿主磁盘上，重启不再恢复默认。此前只写 `localStorage`，而 DSH 的 GUI 端口每次启动都变、`localStorage` 按 origin 隔离，等于每重启一次就是一份新存储。
+- **加**：`GET /clean-chat/api/settings` 读盘、`POST /clean-chat/api/settings` 写盘；落盘位置 `~/.dsh/storages/clean-chat/settings.json`，只存 `system` / `provider` / `model` 三个字段，未知字段丢弃，长度按 8000 / 200 截断。
+- **加**：写盘用临时文件 + `rename` 原子替换；文件损坏或没权限时当空设置处理，不让面板白屏。
+- **加**：老版本升级上来的用户，宿主要是还没有记录，会把 `localStorage` 里的设置自动迁一次；`localStorage` 降级为纯缓存（宿主不可用时兜底）。
+- **对话历史仍然不落盘**——这是这个面板的本分，只有设置跨重启。
+- 测试：新增 settings 路由 14 项（写盘/读回/部分更新/坏文件/跨站/405）+ 客户端持久化 10 项（hydrate、防抖 POST、迁移）。unit 41、client 54、render 11。
+
 ## 0.4.2
 
 - **加**：真实渲染测试 `test/render.test.mjs`——用真的 `react` + `react-dom/server` 渲染面板，devDependency 里加了 react/react-dom。结构测试用的假 React 不校验属性类型，`style` 传字符串这种错只能在真渲染时炸，测试里补上就再也不用靠你重启试出来。

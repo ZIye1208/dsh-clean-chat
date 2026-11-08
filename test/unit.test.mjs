@@ -1,6 +1,7 @@
 /** 纯逻辑单测：拿假的 ctx/req/res 跑一遍路由，不碰真模型。 */
 import { Readable } from 'node:stream';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { registerRoutes, resetModelCache } from '../lib/host/routes.js';
@@ -108,10 +109,11 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   const { ctx, routes } = fakeCtx();
   resetModelCache();
   registerRoutes(ctx);
-  check('注册了 3 条路由', [...routes.keys()].sort(), [
+  check('注册了 4 条路由', [...routes.keys()].sort(), [
     '/clean-chat/api/chat',
     '/clean-chat/api/models',
     '/clean-chat/api/ping',
+    '/clean-chat/api/settings',
   ]);
   const out = await hit(routes.get('/clean-chat/api/ping'), fakeReq({}, 'GET'));
   check('ping 返回 200', out.status, 200);
@@ -232,6 +234,66 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
     fakeReq({ messages: [{ role: 'user', content: 'hi' }] }),
   );
   check('无路由 → 503', out.status, 503);
+}
+
+// ── 8. settings：存盘 / 读回 / 校验 ────────────────────────────────
+{
+  const dir = join(tmpdir(), `clean-chat-test-${process.pid}`);
+  rmSync(dir, { recursive: true, force: true });
+  const { ctx, routes } = fakeCtx();
+  resetModelCache();
+  registerRoutes(ctx, { settingsDir: dir });
+  const route = routes.get('/clean-chat/api/settings');
+
+  const emptyGet = await hit(route, fakeReq({}, 'GET'));
+  check('没文件时 GET → 200', emptyGet.status, 200);
+  check('没文件时给空对象', JSON.parse(emptyGet.body).settings, {});
+
+  const save = await hit(
+    route,
+    fakeReq({ system: '你是猫', provider: 'p1', model: 'm1', junk: 'drop me' }),
+  );
+  check('POST → 200', save.status, 200);
+  check('只存认识的三字段', JSON.parse(save.body).settings, {
+    system: '你是猫',
+    provider: 'p1',
+    model: 'm1',
+  });
+
+  const file = join(dir, 'settings.json');
+  const onDisk = JSON.parse(readFileSync(file, 'utf8'));
+  check('文件里确实写进去了', onDisk.system, '你是猫');
+  check('未知字段没落盘', onDisk.junk, undefined);
+
+  const back = await hit(route, fakeReq({}, 'GET'));
+  check('再 GET 读得回来', JSON.parse(back.body).settings.model, 'm1');
+
+  const patch = await hit(route, fakeReq({ model: 'm2' }));
+  check('部分更新保留其它字段', JSON.parse(patch.body).settings, {
+    system: '你是猫',
+    provider: 'p1',
+    model: 'm2',
+  });
+
+  const bad = await hit(route, fakeReq({ nothing: 1 }));
+  check('没有可存字段 → 400', bad.status, 400);
+
+  const notObject = await hit(route, fakeReq(['a']));
+  check('数组不是合法设置 → 400', notObject.status, 400);
+
+  const crossSite = fakeReq({ model: 'm9' });
+  crossSite.headers = { 'sec-fetch-site': 'cross-site' };
+  check('跨站 POST → 403', (await hit(route, crossSite)).status, 403);
+
+  const getMethod = await hit(route, fakeReq({}, 'PUT'));
+  check('PUT → 405', getMethod.status, 405);
+
+  // 半截损坏的文件不能让面板白屏
+  writeFileSync(file, '{ 这不是 json', 'utf8');
+  const broken = await hit(route, fakeReq({}, 'GET'));
+  check('坏文件当空设置', JSON.parse(broken.body).settings, {});
+
+  rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);

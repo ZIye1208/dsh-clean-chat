@@ -52,6 +52,8 @@ dsh plugin --profile desktop add github:ZIye1208/dsh-clean-chat
 
 历史**只在内存里**：关掉面板或重启 DSH 就没了。这是故意的——它不该变成第二个会话仓库。
 
+**设置的存放位置**：系统提示 / 模型选择存在宿主磁盘 `~/.dsh/storages/clean-chat/settings.json`（只这三个字段），所以重启后还在。不存 `localStorage` 是有原因的：DSH 的 GUI 端口每次启动都变，而 `localStorage` 按 origin 隔离，靠它等于每次重启就换一份存储。`localStorage` 只当兜底缓存——宿主拿不到时用，恢复到宿主后自动迁回去。
+
 ## 它不带什么
 
 - 不带工具：模型不能读文件、不能搜索、不能执行命令（要它看东西，自己粘贴进去）。
@@ -85,6 +87,8 @@ node --check lib/client.js
 |---|---|---|
 | GET | `/clean-chat/api/ping` | 探活 |
 | GET | `/clean-chat/api/models` | 可用 provider/model 列表 + 当前默认 |
+| GET | `/clean-chat/api/settings` | 读存盘的设置（文件不存在返回 `{}`） |
+| POST | `/clean-chat/api/settings` | body `{system?, provider?, model?}`，合并写盘，返回完整设置 |
 | POST | `/clean-chat/api/chat` | body `{system?, provider?, model?, messages:[{role,content}]}`，返回 SSE：`start` / `thought` / `delta` / `usage` / `done` / `error` |
 
 ## License
