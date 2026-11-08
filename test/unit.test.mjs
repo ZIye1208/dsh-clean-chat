@@ -131,7 +131,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
       { type: 'text-delta', text: '你' },
       { type: 'text-delta', text: '好' },
       { type: 'usage', usage: { inputTokens: 12, outputTokens: 2 } },
-      { type: 'finish', kind: 'ok' },
+      { type: 'finish', reason: { kind: 'done' } },
     ],
   });
   registerRoutes(ctx);
@@ -154,7 +154,7 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
 // ── 5. chat：上游报错 ──────────────────────────────────────────────
 {
   const { ctx, routes } = fakeCtx({
-    chunks: [{ type: 'finish', kind: 'error', failure: { code: 'AUTH', message: '密钥无效' } }],
+    chunks: [{ type: 'finish', reason: { kind: 'error', failure: { code: 'AUTH', message: '密钥无效' } } }],
   });
   registerRoutes(ctx);
   const out = await hit(
@@ -180,6 +180,11 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
 
   const getMethod = await hit(routes.get('/clean-chat/api/chat'), fakeReq({}, 'GET'));
   check('GET → 405', getMethod.status, 405);
+
+  const crossSite = fakeReq({ messages: [{ role: 'user', content: 'hi' }] });
+  crossSite.headers = { 'sec-fetch-site': 'cross-site' };
+  const crossOut = await hit(routes.get('/clean-chat/api/chat'), crossSite);
+  check('跨站请求 → 403', crossOut.status, 403);
 }
 
 // ── 7. 没有可用模型 ────────────────────────────────────────────────
