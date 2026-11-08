@@ -160,7 +160,31 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   });
 }
 
-// ── 5. chat：上游报错 ──────────────────────────────────────────────
+// ── 5. chat：assistant 历史必须带 source（否则 llm 服务读 undefined.replayState 崩）──
+{
+  const { ctx, routes } = fakeCtx({ chunks: [{ type: 'text-delta', text: 'ok' }, { type: 'finish', reason: { kind: 'stop' } }] });
+  resetModelCache();
+  registerRoutes(ctx);
+  const out = await hit(
+    routes.get('/clean-chat/api/chat'),
+    fakeReq({
+      messages: [
+        { role: 'user', content: '第一问' },
+        { role: 'assistant', content: '第一答' },
+        { role: 'user', content: '第二问' },
+      ],
+    }),
+  );
+  check('两轮对话 200', out.status, 200);
+  const assistant = ctx.lastStreamOptions.messages.find((m) => m.role === 'assistant');
+  check('assistant 有 source', assistant?.source?.kind, 'model');
+  check('assistant source 带 provider', assistant?.source?.provider, 'fake-provider');
+  check('assistant source 带 model', assistant?.source?.model, 'fake-model');
+  check('assistant 没有 replayState', 'replayState' in (assistant?.source ?? {}), false);
+  check('user 消息不带 source', 'source' in ctx.lastStreamOptions.messages[0], false);
+}
+
+// ── 6. chat：上游报错 ──────────────────────────────────────────────
 {
   const { ctx, routes } = fakeCtx({
     chunks: [{ type: 'finish', reason: { kind: 'error', failure: { code: 'AUTH', message: '密钥无效' } } }],
