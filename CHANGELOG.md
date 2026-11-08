@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- **改**：用量行说实话。以前不管上游有没有缓存字段都印「命中 0%」——opencode 那类网关根本不返回 `cacheReadTokens`，看起来像「缓存全废」。现在区分三种：`缓存命中 640（72%）` / `缓存未命中` / `该路由不返回缓存统计`。顶栏累计同理。
+- **改**：布局对齐主对话。用户消息改成右对齐气泡（`color-mix` 取 7% 主文字色当底，窄至 86% 宽），助手消息不再有「助手」小标签、直接铺满宽度；思考过程收进 `<details>`，默认折叠，点「▸ 思考过程」才展开（以前是一坨灰字糊在回答上面）。
+- **改**：块间距 16 → 18px，列表内边距 14 → 16px。
+
 ## 0.2.1
 
 - **修**：第二轮对话必报 `Cannot read properties of undefined (reading 'replayState')`。assistant 历史消息必须带 `source: {kind:'model', provider, model}`——llm 服务的 `forAdapter()` 会对每条 assistant 消息读 `source.replayState` 判断能否复用上游回放状态，裸 `{role,content}` 就是 `undefined.replayState`。

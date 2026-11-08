@@ -90,7 +90,7 @@ check('缺 betterSidebar 不抛错', threw, '');
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
 
 // ── 纯函数：数字格式 ────────────────────────────────────────────────
-const { fmtTok, usageOf, renderMarkdown } = mod.__internals;
+const { fmtTok, usageOf, usageLine, renderMarkdown } = mod.__internals;
 check('fmtTok 999', fmtTok(999), '999');
 check('fmtTok 1212', fmtTok(1212), '1.2K');
 check('fmtTok 142000', fmtTok(142000), '142K');
@@ -103,6 +103,14 @@ check('usage 总量', u.total, 2040);
 check('usage 未缓存输入', u.uncached, 12);
 check('usage 命中率', Math.round(u.hitRate * 100), 99);
 check('usage 空值', usageOf(null), null);
+check('usage 标了 hasCache', u.hasCache, true);
+
+// 网关型路由不返回 cache 字段：不能显示成「命中 0%」
+const noCache = usageOf({ inputTokens: 43, outputTokens: 81, totalTokens: 124 });
+check('无 cache 字段 → hasCache=false', noCache.hasCache, false);
+check('无 cache 字段的文案', usageLine(noCache), '43 输入 · 81 输出 · 该路由不返回缓存统计');
+check('有 cache 的文案', usageLine(u), '1.2K 输入 · 828 输出 · 缓存命中 1.2K（99%）');
+check('零命中文案', usageLine(usageOf({ inputTokens: 246, outputTokens: 30, cacheReadTokens: 0 })), '246 输入 · 30 输出 · 缓存未命中');
 
 // ── 纯函数：Markdown 块级结构 ──────────────────────────────────────
 const tree = renderMarkdown('# 标题\n\n第一段**粗**和`码`。\n\n- a\n- b\n\n```js\nconst x = 1;\n```\n', 'k');
