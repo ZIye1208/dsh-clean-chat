@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- **加**：真实渲染测试 `test/render.test.mjs`——用真的 `react` + `react-dom/server` 渲染面板，devDependency 里加了 react/react-dom。结构测试用的假 React 不校验属性类型，`style` 传字符串这种错只能在真渲染时炸，测试里补上就再也不用靠你重启试出来。
+- **加**：`pnpm test` / `test:unit` / `test:client` / `test:render` 四个脚本。
+- 已验证这套测试能咬住上一版那个 bug：把 `style` 改回字符串，`render.test.mjs` 立刻 5 项失败；改回类名后全绿。
+
 ## 0.4.1
 
 - **修**：空状态那行提示把 CSS 写成字符串塞进 style 属性，React 直接抛 Minified React error #62（style 必须是对象映射）。改成 .cc-empty-hint 类，并在 client.test 里加了两条静态断言，禁止再出现字符串 style。

@@ -68,9 +68,16 @@ dsh plugin --profile desktop add github:ZIye1208/dsh-clean-chat
 无构建步骤：`lib/client.js` 是手写的 `__ModuleLoader__` 工厂，`lib/host/*` 是纯 ESM。
 
 ```powershell
-node test/unit.test.mjs   # 假 ctx/req/res 跑一遍路由，不碰真模型
+pnpm install              # 只为测试装 react / react-dom
+pnpm test                 # 三套测试一起跑
 node --check lib/client.js
 ```
+
+| 测试 | 跑什么 |
+|---|---|
+| `test/unit.test.mjs` | 假 ctx/req/res 跑路由：SSE 事件序列、超时/报错、没有 tools 字段、assistant 历史必须带 source |
+| `test/client.test.mjs` | 假 React 验结构：模块加载、tab 注册、纯函数（用量折算 / markdown / 数字格式）、禁止字符串 style |
+| `test/render.test.mjs` | **真 React 渲染**：面板整屏、用量胶囊、Markdown——属性类型错误只有真渲染才会炸 |
 
 ## 接口（给自己的脚本用）
 

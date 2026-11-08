@@ -1,6 +1,6 @@
 {
   "name": "dsh-clean-chat",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "DSH 侧栏「闲聊」面板：直连模型、零工具、一句话系统提示——像网页版那样干净。",
   "type": "module",
   "main": "./lib/index.js",
@@ -49,5 +49,15 @@
   },
   "engines": {
     "node": ">=22.14.0"
+  },
+  "scripts": {
+    "test": "node test/unit.test.mjs && node test/client.test.mjs && node test/render.test.mjs",
+    "test:unit": "node test/unit.test.mjs",
+    "test:client": "node test/client.test.mjs",
+    "test:render": "node test/render.test.mjs"
+  },
+  "devDependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
