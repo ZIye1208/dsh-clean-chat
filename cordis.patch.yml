@@ -1,0 +1,10 @@
+# dsh-clean-chat bundle patch
+#
+# 装法（任选）：
+#   dsh plugin --profile desktop add /path/to/dsh-clean-chat
+#   dsh plugin --profile desktop add github:ZIye1208/dsh-clean-chat
+#
+# 本行会被合并进 profile 的插件树，启动时加载 host 侧路由与客户端面板。
+- insert:
+    - id: clean-chat
+      name: dsh-clean-chat

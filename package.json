@@ -1,0 +1,53 @@
+{
+  "name": "dsh-clean-chat",
+  "version": "0.1.0",
+  "description": "DSH 侧栏「闲聊」面板：直连模型、零工具、一句话系统提示——像网页版那样干净。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZIye1208/dsh-clean-chat.git"
+  },
+  "homepage": "https://github.com/ZIye1208/dsh-clean-chat#readme",
+  "bugs": {
+    "url": "https://github.com/ZIye1208/dsh-clean-chat/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "chat",
+    "clean-chat"
+  ],
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.2 <5"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}
