@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- **修**：空状态那行提示把 CSS 写成字符串塞进 style 属性，React 直接抛 Minified React error #62（style 必须是对象映射）。改成 .cc-empty-hint 类，并在 client.test 里加了两条静态断言，禁止再出现字符串 style。
+
 ## 0.4.0
 
 - **改**：用量显示换成主界面同款——回复脚下是一个胶囊 `▤ 用量 2.0K`，点开弹层列出：提供方 / 模型、缓存命中（有命中才出现）、未缓存输入、缓存读取（有才出现）、缓存写入（有才出现）、输出。字段名与显示条件照抄 `@deepseek-ai/dsh-client-ui-chat` 的 `TurnUsagePanel`。

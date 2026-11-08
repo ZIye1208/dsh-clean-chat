@@ -88,6 +88,9 @@ check('缺 betterSidebar 不抛错', threw, '');
 
 // 客户端只允许依赖 react
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
+// style 必须是对象：传字符串会炸成 Minified React error #62
+check('没有字符串 style', /style\s*:\s*'/.test(source), false);
+check('没有字符串 style（双引号）', /style\s*:\s*"/.test(source), false);
 
 // ── 纯函数：数字格式 ────────────────────────────────────────────────
 const { fmtTok, usageOf, usageLine, fmtPercent, fmtExact, TurnUsage, renderMarkdown } = mod.__internals;
