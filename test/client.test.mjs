@@ -90,7 +90,7 @@ check('缺 betterSidebar 不抛错', threw, '');
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
 
 // ── 纯函数：数字格式 ────────────────────────────────────────────────
-const { fmtTok, usageOf, usageLine, fmtPercent, renderMarkdown } = mod.__internals;
+const { fmtTok, usageOf, usageLine, fmtPercent, fmtExact, TurnUsage, renderMarkdown } = mod.__internals;
 check('fmtTok 999', fmtTok(999), '999');
 check('fmtTok 1212', fmtTok(1212), '1.2K');
 check('fmtTok 142000', fmtTok(142000), '142K');
@@ -118,6 +118,17 @@ check('cacheRead=0 文案', usageLine(usageOf({ inputTokens: 246, outputTokens: 
 // 命中率不许把 99.96% 抹成 100%
 check('99.96% 不显示成 100', fmtPercent(9996, 10000), '99.9');
 check('满命中显示 100', fmtPercent(1000, 1000), '100');
+check('fmtExact 千分位', fmtExact(142000), '142,000');
+
+// ── 用量胶囊（关闭态：只有胶囊，没有弹层）──────────────────────────
+const turn = TurnUsage({ item: { usage: u, route: 'dsh-opencode-go / deepseek-v4.1-flash' } });
+check('胶囊容器类名', turn.props.className, 'cc-usage-wrap');
+const pill = turn.children[0];
+check('胶囊类名', pill.props.className, 'cc-usage-pill');
+check('胶囊文案', pill.children[1].children[0], '用量 4.7K');
+check('胶囊有 title', typeof pill.props.title, 'string');
+check('关闭时没有弹层', turn.children[1], null);
+check('没有 usage 时不渲染', TurnUsage({ item: { usage: null } }), null);
 
 // ── 纯函数：Markdown 块级结构 ──────────────────────────────────────
 const tree = renderMarkdown('# 标题\n\n第一段**粗**和`码`。\n\n- a\n- b\n\n```js\nconst x = 1;\n```\n', 'k');

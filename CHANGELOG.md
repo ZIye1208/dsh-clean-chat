@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- **改**：用量显示换成主界面同款——回复脚下是一个胶囊 `▤ 用量 2.0K`，点开弹层列出：提供方 / 模型、缓存命中（有命中才出现）、未缓存输入、缓存读取（有才出现）、缓存写入（有才出现）、输出。字段名与显示条件照抄 `@deepseek-ai/dsh-client-ui-chat` 的 `TurnUsagePanel`。
+- **加**：弹层点外面或按 Esc 关闭；胶囊 `title` 里带一行紧凑文案（`246 输入 · 3.9K 输出 · 缓存命中 72.2%（640 tok）`）。
+- **加**：每轮记录实际路由（`start` 事件里的 provider/model），弹层第一行显示的就是它，跟你选的模型可能不同（比如回落）。
+- 图标用 `▤` 文字符号代替主界面的 `IconDatabaseOutlineRegular`——`dsh-client-ui-primitives` 官方不建议插件 require。
+
 ## 0.3.1
 
 - **修**：命中率分母算错了。适配器的 `inputTokens` 是**未缓存**输入，`cacheReadTokens` 另算；原来用 `cacheRead / inputTokens`，真命中时会算出 260% 这种鬼数字。改成主界面口径：分母 = `totalTokens - outputTokens`（提示词总量）。
