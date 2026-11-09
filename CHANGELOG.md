@@ -8,18 +8,6 @@
 
 （暂无）
 
-## [0.8.0] - 2026-11-09
-
-### 变更
-
-- 面板改用**宿主原生右侧栏**：`ctx.sidebarRightTabs.register({ id, kind, keepMounted, priority, title, guide })` 声明页类型，正文注册到 `sidebar.right.pane.tab` 席位（`key` 与类型 `id` 一致）。
-- 不再依赖 `dsh-better-sidebar`；它本身也只是原生席位的消费者，装着也不冲突。仅当宿主没有 `sidebarRightTabs`（老版本）时才退化为 `ctx.betterSidebar.registerTab`。
-- 插件 `inject` 从 `['betterSidebar']` 改为 `['sidebarRightTabs']`；右侧栏引导页新增「闲聊」入口卡片。
-
-### 测试
-
-- client 60（+6：原生类型注册、正文席位名与 key、老宿主退化、两者都缺时不抛）/ unit 76 / render 11 全绿。
-
 ## [0.7.2] - 2026-11-09
 
 ### 修复

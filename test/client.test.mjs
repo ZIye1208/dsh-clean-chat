@@ -50,11 +50,10 @@ const requireStub = (id) => {
 const mod = loaded.factory(requireStub);
 
 check('导出 apply', typeof mod.apply, 'function');
-check('声明 inject', mod.inject, ['sidebarRightTabs']);
+check('声明 inject', mod.inject, ['betterSidebar']);
 
-// 走宿主原生右侧栏：注册页类型 + 正文席位
-const types = [];
-const slots = [];
+// 注册出 tab
+const tabs = [];
 const effects = [];
 const ctx = {
   effect(fn, label) {
@@ -63,50 +62,29 @@ const ctx = {
     if (typeof dispose === 'function') dispose();
     return () => {};
   },
-  get(name) {
-    return name === 'sidebarRightTabs' ? { register: (definition) => (types.push(definition), () => {}) } : undefined;
-  },
-  slots: {
-    register(seat, component) {
-      slots.push({ seat, component });
+  betterSidebar: {
+    registerTab(descriptor) {
+      tabs.push(descriptor);
       return () => {};
     },
   },
 };
 mod.apply(ctx);
-check('注册了 1 个页类型', types.length, 1);
-check('页类型 id', types[0]?.id, 'clean-chat');
-check('页类型 kind', types[0]?.kind, 'clean-chat');
-check('页类型常驻', types[0]?.keepMounted, true);
-check('引导页有入口', Array.isArray(types[0]?.guide) && types[0].guide.length, 1);
-check('注册了正文席位', slots.length, 1);
-check('席位名', slots[0]?.seat?.name, 'sidebar.right.pane.tab');
-check('席位 key 与类型 id 一致', slots[0]?.seat?.key, types[0]?.id);
-check('正文是组件', typeof slots[0]?.component, 'function');
+check('注册了 1 个 tab', tabs.length, 1);
+check('tab id', tabs[0]?.id, 'clean-chat');
+check('tab 单例', tabs[0]?.single, true);
+check('tab 有 component', typeof tabs[0]?.component, 'function');
+check('effect 有标签', effects.length, 1);
 
-// 老宿主只剩 better-sidebar 时退化为它的页签
-const legacyTabs = [];
-const legacy = {
-  effect(fn) {
-    const dispose = fn();
-    if (typeof dispose === 'function') dispose();
-  },
-  get: () => undefined,
-  betterSidebar: { registerTab: (descriptor) => (legacyTabs.push(descriptor), () => {}) },
-};
-mod.apply(legacy);
-check('老宿主退化为 better-sidebar 页签', legacyTabs.length, 1);
-check('退化页签 id', legacyTabs[0]?.id, 'clean-chat');
-
-// 两者都没有时静默跳过，不抛
-const bare = { effect: () => {}, get: () => undefined };
+// 没有 betterSidebar 时静默跳过，不抛
+const bare = { effect: () => {}, betterSidebar: undefined };
 let threw = '';
 try {
   mod.apply(bare);
 } catch (error) {
   threw = String(error?.message ?? error);
 }
-check('两者都没有时不抛错', threw, '');
+check('缺 betterSidebar 不抛错', threw, '');
 
 // 客户端只允许依赖 react
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
