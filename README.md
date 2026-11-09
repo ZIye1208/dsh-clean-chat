@@ -20,11 +20,7 @@ DSH 里的「侧边对话」和「创建分支」都会把主会话的历史带�
 
 ## 安装
 
-**前置**：已安装 [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar)——本插件把面板注册进它的右侧栏，没有它就只有一个 `console.warn`。
-
-```powershell
-dsh plugin --profile desktop add dsh-better-sidebar@latest
-```
+**前置**：**不需要任何侧栏插件**。面板走 DSH 自带的右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right` 提供的 `ctx.sidebarRightTabs` 与 `sidebar.right.pane.tab` 席位），装了 `dsh-better-sidebar` 也互不影响；只有在老宿主（没有 `sidebarRightTabs`）上才退化为前者的页签。
 
 ### 方式一：插件页添加（推荐，不用记命令）
 
@@ -107,7 +103,7 @@ Select-String -Path "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Patte
 ## 兼容性
 
 - DSH `0.2.2-rc.1`（桌面端）实测可用；要求宿主暴露 `webServer` 与 `llm` 服务。
-- 面板依赖 `ctx.betterSidebar.registerTab`；没装 better-sidebar 时插件不注册任何界面（host 路由仍可访问）。
+- 面板走宿主原生右侧栏（`sidebarRightTabs.register` + `sidebar.right.pane.tab` 席位）；老宿主没有该服务时才退化为 `ctx.betterSidebar.registerTab`。两者都没有时插件不注册任何界面（host 路由仍可访问）。
 
 ## 开发
 
