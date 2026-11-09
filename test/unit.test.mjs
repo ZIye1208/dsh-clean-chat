@@ -48,10 +48,16 @@ function fakeRes() {
 }
 
 /** 假 req：POST + JSON body。默认带同源头（真浏览器 fetch 就是这么发的）。 */
-function fakeReq(body, method = 'POST', headers = { 'sec-fetch-site': 'same-origin', host: '127.0.0.1:9999' }) {
+function fakeReq(
+  body,
+  method = 'POST',
+  headers = { 'sec-fetch-site': 'same-origin', host: '127.0.0.1:9999' },
+  remoteAddress = '127.0.0.1',
+) {
   const req = Readable.from([Buffer.from(JSON.stringify(body))]);
   req.method = method;
   req.headers = headers;
+  req.socket = { remoteAddress };
   return req;
 }
 
@@ -310,15 +316,16 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   noHeaders.headers = undefined;
   check('没有来源头 → 403', (await hit(chat, noHeaders)).status, 403);
 
-  const noneSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'none' });
-  check('sec-fetch-site: none → 403', (await hit(chat, noneSite)).status, 403);
-  // ↑ 这条就是之前的洞：curl / 脚本 / 浏览器扩展发的请求都长这样。
+  // `none` 不再一律拒绝：桌面端面板可能是 file:// 或被包一层，实测就发这个值。
+  // 真正挡脚本的是「必须有 sec-fetch-site」这条（curl 一个头都没有）。
+  const noneSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'none', host: '127.0.0.1:9999' });
+  check('sec-fetch-site: none → 放行（file:// 宿主页面）', (await hit(chat, noneSite)).status, 200);
 
   const crossSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'cross-site' });
   check('sec-fetch-site: cross-site → 403', (await hit(chat, crossSite)).status, 403);
 
   const originOk = fakeReq(payload, 'POST', { origin: 'http://127.0.0.1:9999', host: '127.0.0.1:9999' });
-  check('老浏览器无 site 头但 Origin 对得上 → 放行', (await hit(chat, originOk)).status, 200);
+  check('没有 site 头就是脚本 → 403', (await hit(chat, originOk)).status, 403);
 
   const originBad = fakeReq(payload, 'POST', { origin: 'http://evil.example', host: '127.0.0.1:9999' });
   check('Origin 对不上 → 403', (await hit(chat, originBad)).status, 403);
@@ -329,8 +336,8 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   check('读设置也要同源', (await hit(settingsRoute, settingsNoOrigin)).status, 403);
 
   const modelsNoOrigin = fakeReq({}, 'GET');
-  modelsNoOrigin.headers = { 'sec-fetch-site': 'none' };
-  check('列模型也要同源', (await hit(routes.get('/clean-chat/api/models'), modelsNoOrigin)).status, 403);
+  modelsNoOrigin.headers = { host: '127.0.0.1:9999' };
+  check('列模型也要过来源闸（无 site 头 → 403）', (await hit(routes.get('/clean-chat/api/models'), modelsNoOrigin)).status, 403);
 }
 
 // ── 10. 长度超限：说清楚，不再静默截断 ──────────────────────────────
@@ -413,15 +420,59 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   registerRoutes(ctx);
   const chat = routes.get('/clean-chat/api/chat');
 
-  // Host 不是回环 → 即便 sec-fetch-site 是 same-origin 也拒（防 DNS rebinding）
-  const rebinding = await hit(
+  // 0.6.0 的闸太严，把宿主自己的面板也挡了（桌面端页面发的是 same-site / none）。
+  // 现在按「回环 socket + 是浏览器 + 非 cross-site + Origin 回环」判，这里逐条咬住。
+  const noFetch = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', { host: '127.0.0.1:9999' }),
+  );
+  check('没有 sec-fetch-site（curl/脚本）→ 403', noFetch.status, 403);
+
+  const crossSite = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', {
+      'sec-fetch-site': 'cross-site',
+      host: '127.0.0.1:9999',
+      origin: 'https://evil.example.com',
+    }),
+  );
+  check('cross-site → 403', crossSite.status, 403);
+
+  const evilOrigin = await hit(
     chat,
     fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', {
       'sec-fetch-site': 'same-origin',
       host: 'evil.example.com',
+      origin: 'https://evil.example.com',
     }),
   );
-  check('非回环 Host → 403', rebinding.status, 403);
+  check('Origin 是外站 → 403', evilOrigin.status, 403);
+
+  const remote = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', undefined, '192.168.1.9'),
+  );
+  check('socket 不是回环 → 403', remote.status, 403);
+
+  const sameSite = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', {
+      'sec-fetch-site': 'same-site',
+      host: 'localhost:9999',
+      origin: 'http://localhost:9999',
+    }),
+  );
+  check('same-site + 回环 Origin → 放行（桌面端就是这种）', sameSite.status, 200);
+
+  const fileOrigin = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', {
+      'sec-fetch-site': 'none',
+      host: '127.0.0.1:9999',
+      origin: 'null',
+    }),
+  );
+  check('file:// 页面（Origin: null + none）→ 放行', fileOrigin.status, 200);
 
   // 消息条数超过 200
   const many = Array.from({ length: 201 }, (_, i) => ({

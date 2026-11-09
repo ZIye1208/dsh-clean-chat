@@ -8,6 +8,22 @@
 
 （暂无）
 
+## [0.6.1] - 2026-11-09
+
+### 修复
+
+- **修**：0.6.0 的来源闸把宿主自己的面板挡在门外——桌面端页面发的不是 `same-origin`（实测被挡后模型列表空白、每次发送都回「跨站请求被拒绝」）。现在按「socket 是回环 + 带 `sec-fetch-site` + 不是 `cross-site` + `Origin` 主机是回环（若带）」判定：
+  - `same-origin` / `same-site` / `none` 都放行（桌面端、`file://` 宿主页面都能过）；
+  - `curl`、本机脚本、Node 客户端仍然拒绝（它们一个 `sec-fetch-site` 都没有）；
+  - 真跨站页面（`cross-site` 且 `Origin` 是外站）拒绝；
+  - 非回环 socket 拒绝（挡掉局域网访问）。
+- **修**：403 响应里带上拒绝原因（`已拒绝（没有 sec-fetch-site）`），面板出错时截图就能定位，不用再猜。
+- 宿主内存里保留最近 20 次拒绝的头部形状（`lastReject()` 可读），不落盘。
+
+### 测试
+
+- unit 74（+5：无 `sec-fetch-site`、`cross-site`、外站 `Origin`、非回环 socket、`none`/`same-site` 放行）。
+
 ## [0.6.0] - 2026-11-09
 
 ### 安全
