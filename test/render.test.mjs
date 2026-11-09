@@ -46,21 +46,26 @@ const mod = loaded.factory((id) => {
   throw new Error(`不允许的模块依赖：${id}`);
 });
 
-// 抓出 tab 组件
+// 抓出 tab 组件（走宿主原生右侧栏那条路）
 const tabs = [];
+const types = [];
+const service = { register: (definition) => (types.push(definition), () => {}) };
 mod.apply({
   effect(fn) {
     const dispose = fn();
     return typeof dispose === 'function' ? dispose : () => {};
   },
-  betterSidebar: {
-    registerTab(descriptor) {
-      tabs.push(descriptor);
+  inject: (list, callback) => callback({ get: (name) => (name === 'sidebarRightTabs' ? service : undefined) }),
+  get: () => undefined,
+  slots: {
+    inject: (seat, register) => register(),
+    register: (seat, component) => {
+      tabs.push({ seat, component });
       return () => {};
     },
   },
 });
-const ChatTab = tabs[0].component;
+const ChatTab = tabs[0]?.component;
 
 // ── 1. 空状态整屏渲染（这里就是上次 style 字符串炸掉的地方）──────────
 let html = '';

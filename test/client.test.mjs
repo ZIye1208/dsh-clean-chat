@@ -48,44 +48,101 @@ const requireStub = (id) => {
   throw new Error(`不允许的模块依赖：${id}`);
 };
 const mod = loaded.factory(requireStub);
-
 check('导出 apply', typeof mod.apply, 'function');
-check('声明 inject', mod.inject, ['betterSidebar']);
+check('声明 inject 含 slots', mod.inject, ['slots']);
 
-// 注册出 tab
-const tabs = [];
-const effects = [];
-const ctx = {
-  effect(fn, label) {
-    effects.push(label);
-    const dispose = fn();
-    if (typeof dispose === 'function') dispose();
-    return () => {};
-  },
-  betterSidebar: {
-    registerTab(descriptor) {
-      tabs.push(descriptor);
+/**
+ * 假 ctx：**按 inject 声明守门**，且 effect / inject 都会真的执行回调。
+ * 0.8.0 崩就崩在两点：假 ctx 白送了 slots（不用声明也能摸），effect 又不执行 fn，
+ * 于是 `ctx.slots.register` 那段在测试里一次都没真跑过。下面两条都按真宿主行为来。
+ */
+function makeCtx({ declared = mod.inject, services = {}, executeEffects = true } = {}) {
+  const calls = { types: [], slots: [], effects: [], warnings: [] };
+  const allowed = new Set(declared);
+  const guard = (name, value) => {
+    if (!allowed.has(name)) throw new Error(`cannot get property "${name}" without inject`);
+    return value;
+  };
+  const ctx = {
+    get: (name) => guard(name, services[name]),
+    effect(fn, label) {
+      calls.effects.push(label);
+      if (!executeEffects) return () => {};
+      const dispose = fn();
+      if (typeof dispose === 'function') dispose();
       return () => {};
     },
-  },
-};
-mod.apply(ctx);
-check('注册了 1 个 tab', tabs.length, 1);
-check('tab id', tabs[0]?.id, 'clean-chat');
-check('tab 单例', tabs[0]?.single, true);
-check('tab 有 component', typeof tabs[0]?.component, 'function');
-check('effect 有标签', effects.length, 1);
-
-// 没有 betterSidebar 时静默跳过，不抛
-const bare = { effect: () => {}, betterSidebar: undefined };
-let threw = '';
-try {
-  mod.apply(bare);
-} catch (error) {
-  threw = String(error?.message ?? error);
+    /**
+     * 真 host 的 ctx.inject(list, cb) 会等到这些服务就绪再回调，
+     * 回调里那批服务就是可访问的 —— 这里照此把它们加入允许集。
+     */
+    inject(list, callback) {
+      for (const name of list) allowed.add(name);
+      return callback(ctx);
+    },
+  };
+  Object.defineProperty(ctx, 'slots', {
+    configurable: true,
+    get() {
+      guard('slots', true);
+      return {
+        inject(seat, register) {
+          return register();
+        },
+        register(seat, component) {
+          calls.slots.push({ seat, component });
+          return () => {};
+        },
+      };
+    },
+  });
+  for (const [name, value] of Object.entries(services)) {
+    Object.defineProperty(ctx, name, { get: () => guard(name, value), configurable: true });
+  }
+  return { ctx, calls };
 }
-check('缺 betterSidebar 不抛错', threw, '');
 
+// 原生路径：注册页类型 + 等席位就绪再注册正文
+{
+  const { ctx, calls } = makeCtx({
+    services: { sidebarRightTabs: { register: (definition) => (calls.types.push(definition), () => {}) } },
+  });
+  mod.apply(ctx);
+  check('注册了 1 个页类型', calls.types.length, 1);
+  check('页类型 id', calls.types[0]?.id, 'clean-chat');
+  check('页类型 kind', calls.types[0]?.kind, 'clean-chat');
+  check('页类型常驻', calls.types[0]?.keepMounted, true);
+  check('priority 用官方认可的值', calls.types[0]?.priority, 'extension');
+  check('引导页有入口', Array.isArray(calls.types[0]?.guide) && calls.types[0].guide.length, 1);
+  check('正文注册进 sidebar.right.pane.tab', calls.slots.length, 1);
+  check('席位名', calls.slots[0]?.seat?.name, 'sidebar.right.pane.tab');
+  check('席位 key 与类型 id 一致', calls.slots[0]?.seat?.key, calls.types[0]?.id);
+  check('正文是组件', typeof calls.slots[0]?.component, 'function');
+}
+
+// 0.8.0 事故复现：inject 没写 slots 时访问 ctx.slots 会抛 —— 但 apply 必须自己兜住
+{
+  const { ctx } = makeCtx({ declared: [], services: { sidebarRightTabs: { register: () => () => {} } } });
+  let threw = '';
+  try {
+    mod.apply(ctx);
+  } catch (error) {
+    threw = String(error?.message ?? error);
+  }
+  check('漏声明 slots 时 apply 不抛（运行期兜住）', threw, '');
+}
+
+// 没有 sidebarRightTabs：不抛，只警告
+{
+  const { ctx } = makeCtx();
+  let threw = '';
+  try {
+    mod.apply(ctx);
+  } catch (error) {
+    threw = String(error?.message ?? error);
+  }
+  check('没有右侧栏服务时 apply 不抛', threw, '');
+}
 // 客户端只允许依赖 react
 check('只 require react', /require\((?!'react'\))/.test(source.replace(/require\('react'\)/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'[^']*'/g, "''")), false);
 // style 必须是对象：传字符串会炸成 Minified React error #62

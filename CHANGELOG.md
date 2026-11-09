@@ -8,6 +8,22 @@
 
 （暂无）
 
+## [0.8.1] - 2026-11-09
+
+### 修复
+
+- **修掉 0.8.0 的启动崩溃**（`dsh-clean-chat: failed`，整次客户端 boot 中断）：
+  - `inject` 补上 `slots`：cordis 的代理访问未声明服务会抛 `cannot get property "slots" without inject`，而 apply 抛异常 = boot 失败。
+  - 正文席位改用 `ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(...))`，等按 key 的席位就绪再注册（直接 `register` 会撞 unknown slot）。
+  - `sidebarRightTabs` 不再写进模块级 `inject`（那是必达依赖，会让老宿主永远不激活），改为 `ctx.inject(['sidebarRightTabs'], …)` 按就绪回调。
+  - apply 内部的挂载逻辑加兜底：任何运行期异常只 `console.error`，不再把宿主拖崩。
+- 删掉 `better-sidebar` 退化路径：它与「模块级 inject 必达」互斥，留着是死代码。
+
+### 测试
+
+- client 60（改为**按 inject 声明守门**的假 ctx，且 `effect`/`inject` 会真的执行回调——0.8.0 就是靠假 ctx 白送服务才漏过的）+ unit 76 / render 11 全绿。
+- 新增 `_tools/scripts/verify-client-activation.mjs` 激活演练：完整宿主 / 服务不就绪 / 宿主缺服务三种场景；已反向验证——拿 0.8.0 的旧 `client.js` 跑它会重现 `cannot get property "slots" without inject`。
+
 ## [0.7.2] - 2026-11-09
 
 ### 修复
