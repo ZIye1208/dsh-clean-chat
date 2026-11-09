@@ -322,7 +322,14 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   check('sec-fetch-site: none → 放行（file:// 宿主页面）', (await hit(chat, noneSite)).status, 200);
 
   const crossSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'cross-site' });
-  check('sec-fetch-site: cross-site → 403', (await hit(chat, crossSite)).status, 403);
+  check('cross-site 且无 Origin → 403', (await hit(chat, crossSite)).status, 403);
+
+  // Electron 自定义 scheme 的壳页面会被 Chromium 标成 cross-site，那不是攻击
+  const appShell = fakeReq(payload, 'POST', { 'sec-fetch-site': 'cross-site', origin: 'app://dsh' });
+  check('自定义 scheme（app://）→ 放行', (await hit(chat, appShell)).status, 200);
+
+  const evilCross = fakeReq(payload, 'POST', { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example.com' });
+  check('cross-site + https 外站 → 403', (await hit(chat, evilCross)).status, 403);
 
   const originOk = fakeReq(payload, 'POST', { origin: 'http://127.0.0.1:9999', host: '127.0.0.1:9999' });
   check('没有 site 头就是脚本 → 403', (await hit(chat, originOk)).status, 403);
