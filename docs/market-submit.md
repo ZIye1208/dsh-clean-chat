@@ -11,9 +11,14 @@
 | 2 | 仓库有真实可用代码 | ✅ | `lib/` 1711 行 / 66 KB，三套测试 76 + 60 + 11 项 |
 | 3 | 仓库创建满 24 小时 | ⏳ | 创建于 2026-11-08T16:03:30Z，**2026-11-10 00:03（CST）** 达标 |
 | 4 | 仓库带 `dsh-plugin` topic | ✅ | 已在 topics 里；同时清掉了已不属实的 `dsh-better-sidebar` |
-| 5 | npm 包 `repository` 指回收录仓库 | — | 不发 npm；`package.json` 的 `repository` 已指向本仓库 |
+| 5 | npm 包 `repository` 指回收录仓库 | ✅ | 已发 `dsh-clean-chat@1.0.0`，`repository` 指向本仓库；映射由 registry 自动采集，**条目 yml 里不要写 `npm:` 字段**（会被校验拒绝） |
 | 6 | 图标是 GitHub 托管的位图 | ✅ | `assets/icon-180.png`（180×180 PNG，非 SVG） |
 | 7 | 一 PR ≤ 3 条 | ✅ | 1 条 |
+
+## 已对外发布（2026-11-09）
+
+- GitHub Release：`v1.0.0`（tag 指向 `c87ebf7`）
+- npm：`dsh-clean-chat@1.0.0`（`dist-tags.latest` 已验证，tarball SHA1 `4071194b…` 与 registry `dist.shasum` 一致）
 
 ## 还差的前提
 
