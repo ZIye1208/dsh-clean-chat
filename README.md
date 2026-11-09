@@ -2,7 +2,7 @@
 
 给 DSH 侧栏加一格**干净对话**：不给工具、不带会话上下文、不建会话文件——像网页版那样，只是问一句、答一句。
 
-![tab](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue) ![license](https://img.shields.io/badge/license-MIT-green)
+![tab](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue) ![npm](https://img.shields.io/npm/v/dsh-clean-chat) ![license](https://img.shields.io/badge/license-MIT-green)
 
 ## 它解决的问题
 
@@ -22,20 +22,39 @@ DSH 里的「侧边对话」和「创建分支」都会把主会话的历史带�
 
 **前置**：**不需要任何侧栏插件**。面板走 DSH 自带的右侧栏（`@deepseek-ai/dsh-client-ui-sidebar-right` 提供的 `ctx.sidebarRightTabs` 与 `sidebar.right.pane.tab` 席位）。装了 `dsh-better-sidebar` 也不冲突——它本身也是这套原生席位的消费者。
 
-### 方式一：插件页添加（推荐，不用记命令）
+### 方式一：npm（推荐）
+
+包已发布到 npm，装最新版：
+
+```powershell
+dsh plugin --profile desktop add dsh-clean-chat
+```
+
+钉住版本（推荐，发新版不会意外升级）：
+
+```powershell
+dsh plugin --profile desktop add dsh-clean-chat@1.0.0 --save-exact
+```
+
+### 方式二：插件页添加（不用记命令）
 
 1. DSH 桌面端 → 左下角**设置** → **插件**
 2. 右上角**添加**，在输入框里填下面任意一种标识：
-   - 本地目录：`H:/dshX/dsh-clean-chat`
+   - npm：`dsh-clean-chat`
    - GitHub：`github:ZIye1208/dsh-clean-chat`
-   - npm（发布后）：`dsh-clean-chat`
+   - 本地目录：`H:/dshX/dsh-clean-chat`
 3. 安装完成后**完全退出 DSH 再打开**（插件在启动时加载，热重载不生效）
+
+> 从 npm 装的包是预构建产物，不需要跑构建脚本；从 GitHub 装会走源码，同样没有构建步骤（纯 JS，无打包器）。
 
 > 前提：模型由宿主的 `llm` 服务提供，插件本身不带密钥——能用的模型就是你 DSH 里已经配好的那些。
 
-### 方式二：命令行
+### 方式三：命令行（与上面两条等价）
 
 ```powershell
+# 从 npm
+dsh plugin --profile desktop add dsh-clean-chat --save-exact
+
 # 从本地目录（开发时改完源码立刻生效，桌面端装的是链接不是拷贝）
 dsh plugin --profile desktop add H:/dshX/dsh-clean-chat
 

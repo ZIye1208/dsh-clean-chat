@@ -8,6 +8,32 @@
 
 （暂无）
 
+## [1.0.0] - 2026-11-09
+
+首个稳定版。此前的 0.1.0–0.8.1 是快速迭代期，未单独打 tag。
+
+### 新增
+
+- **右侧栏「闲聊」面板**：走宿主原生右侧栏（`ctx.sidebarRightTabs.register` + `sidebar.right.pane.tab` 席位），不依赖任何侧栏插件。
+- **直连模型、不组 `tools`**：宿主路由把 `{system, messages}` 直接交给 `ctx.llm.stream`，请求体里没有工具定义，也没有会话上下文——首轮就是一个系统提示加你的问题。
+- **不建会话文件**：历史只在页面内存里，会话列表、上下文报表、压缩账本都不会多出一条。
+- **用量胶囊**：每条回复下方显示本轮 token 用量与缓存命中（字段与主界面「本轮用量」同口径，分母是 `total - output` 而不是未缓存输入），顶栏显示累计。
+- **设置持久化**：系统提示 / 模型存到 `~/.dsh/storages/clean-chat/settings.json`（原子写），不依赖会随端口变化的 `localStorage`。
+- **宿主路由**：`/clean-chat/api/{ping,models,settings,chat}`，`/chat` 走 SSE 流式。
+
+### 修复
+
+- **0.8.0 的启动崩溃**：`inject` 漏声明 `slots` 导致 `cannot get property "slots" without inject`，apply 抛异常 → 整个客户端 boot 中断。已补 `inject`、改走 `ctx.slots.inject(seat, …)` 等席位就绪、并用 `ctx.inject(['sidebarRightTabs'], …)` 代替必达注入；apply 内部异常只 `console.error`，不再拖崩宿主。
+- **历史里的 assistant 消息崩溃**：`Cannot read properties of undefined (reading 'replayState')`——只发 `{role, content}` 时 `dsh-llm` 会解引用 `source`。改为补 `source: {kind:'model', provider, model}`。
+- **来源校验误伤自己**（0.6.0–0.6.2 三代）：桌面端请求经宿主转发，没有 `sec-fetch-site` / `Origin`，与 `curl` 无异。最终改为「socket 必须是本机 + `Origin` 若是 http(s) 必须回环」，并在 README 里写明「本机脚本挡不住」。
+- **空白消息与错误 Content-Type**：全空白内容曾真的触发模型调用；`text/plain` 曾被硬当 JSON 解析。现在空白拒绝、只有明确声明非 JSON 类型才 415。
+
+### 测试
+
+- `test/unit.test.mjs` 76 项、`test/client.test.mjs` 60 项、`test/render.test.mjs` 11 项（真 `react-dom/server` 渲染），全绿。
+- 客户端假 ctx 现在**按 inject 声明守门**、`effect` 与 `inject` 会真的执行回调——这是 0.8.0 漏网的那个洞。
+- 发布前实测：`_tools/scripts/verify-client-activation.mjs` 三种宿主场景 8 项全过；拿 0.8.0 的旧 `client.js` 跑它会重现当初的崩溃原文。
+
 ## [0.8.1] - 2026-11-09
 
 ### 修复
@@ -231,14 +257,8 @@
 
 - 首个版本：侧栏「闲聊」tab，直连 `ctx.llm.stream`，零工具、零会话上下文、历史只在内存。
 
-[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.2...v0.5.0
-[0.4.2]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.3.1...v0.4.0
-[0.3.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/ZIye1208/dsh-clean-chat/releases/tag/v0.1.0
+0.1.0–0.8.1 为 1.0.0 之前的迭代，未单独打 tag。
+
+[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ZIye1208/dsh-clean-chat/releases/tag/v1.0.0
+
