@@ -4,7 +4,8 @@ import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { registerRoutes, resetModelCache } from '../lib/host/routes.js';
+import { registerRoutes, resetModelCache, resetRateLimiter } from '../lib/host/routes.js';
+import { RATE_LIMIT_PER_MINUTE } from '../lib/host/constants.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
@@ -402,6 +403,98 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
     fakeReq({ provider: 'p1', model: 'cheap', messages: [{ role: 'user', content: 'hi' }] }),
   );
   check('点存在的模型 → 200', good.status, 200);
+}
+
+// ── 0.6.0：来源校验加强 / 条数上限 / 限流 / 错误脱敏 ─────────────────
+{
+  const { ctx, routes } = fakeCtx({ chunks: [{ type: 'text-delta', text: 'ok' }] });
+  resetModelCache();
+  resetRateLimiter();
+  registerRoutes(ctx);
+  const chat = routes.get('/clean-chat/api/chat');
+
+  // Host 不是回环 → 即便 sec-fetch-site 是 same-origin 也拒（防 DNS rebinding）
+  const rebinding = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'hi' }] }, 'POST', {
+      'sec-fetch-site': 'same-origin',
+      host: 'evil.example.com',
+    }),
+  );
+  check('非回环 Host → 403', rebinding.status, 403);
+
+  // 消息条数超过 200
+  const many = Array.from({ length: 201 }, (_, i) => ({
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: 'x',
+  }));
+  many[many.length - 1] = { role: 'user', content: 'x' };
+  const tooMany = await hit(chat, fakeReq({ messages: many }));
+  check('消息条数超 200 → 413', tooMany.status, 413);
+  check('413 说清条数', /条消息/.test(JSON.parse(tooMany.body).error), true);
+
+  // 第 21 次命中限流
+  const body = { messages: [{ role: 'user', content: 'hi' }] };
+  let last = null;
+  for (let i = 0; i < RATE_LIMIT_PER_MINUTE + 1; i += 1) {
+    last = await hit(chat, fakeReq(body));
+  }
+  check(`第 ${RATE_LIMIT_PER_MINUTE + 1} 次 → 429`, last.status, 429);
+  check('429 提示发得太快', /太快/.test(JSON.parse(last.body).error), true);
+
+  // 并发：在途上限 RATE_LIMIT_CONCURRENT=2，第 3 个立刻被挡（别让上游堆请求）
+  resetRateLimiter();
+  let unblock;
+  const gate = new Promise((resolve) => {
+    unblock = resolve;
+  });
+  const slow = fakeCtx({ chunks: [] });
+  let streamCount = 0;
+  slow.ctx.llm.stream = () => {
+    streamCount += 1;
+    return (async function* () {
+      await gate;
+      yield { type: 'text-delta', text: 'late' };
+    })();
+  };
+  resetModelCache();
+  registerRoutes(slow.ctx);
+  const slowChat = slow.routes.get('/clean-chat/api/chat');
+  const running = [
+    slowChat(fakeReq(body), fakeRes().res),
+    slowChat(fakeReq(body), fakeRes().res),
+  ];
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const third = await hit(slowChat, fakeReq(body));
+  check('两个在途时第 3 个 → 429', third.status, 429);
+  check('提示上一个还没结束', /还没结束/.test(JSON.parse(third.body).error), true);
+  check('只真的开了两次上游调用', streamCount, 2);
+  unblock();
+  await Promise.all(running);
+}
+
+// 上游报错只回人话，不回原文（原文可能带 URL / trace）
+{
+  resetRateLimiter();
+  const { ctx, routes } = fakeCtx({
+    chunks: [
+      {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: { code: 'MISSING_CREDENTIAL', message: 'post https://api.secret.internal/v1 boom key=sk-xxx' },
+        },
+      },
+    ],
+  });
+  resetModelCache();
+  registerRoutes(ctx);
+  const chat = routes.get('/clean-chat/api/chat');
+  const res = await hit(chat, fakeReq({ messages: [{ role: 'user', content: 'hi' }] }));
+  check('错误事件仍是 200（SSE 流）', res.status, 200);
+  check('失败码回人话', /凭据/.test(res.body), true);
+  check('不回传上游原文', /api\.secret\.internal/.test(res.body), false);
+  check('不回传 key', /sk-xxx/.test(res.body), false);
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);

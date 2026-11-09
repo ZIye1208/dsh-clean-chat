@@ -176,7 +176,7 @@ check('空文本不炸', renderMarkdown('', 'z').length, 0);
   // 改设置 → 防抖后 POST 到宿主（不是只写 localStorage）
   const before = calls.filter((call) => call.method === 'POST').length;
   internals.store.setSettings({ model: 'm9' });
-  await new Promise((resolve) => setTimeout(resolve, 520));
+  await new Promise((resolve) => setTimeout(resolve, 900));
   const posts = calls.filter((call) => call.method === 'POST');
   check('改设置 POST 了一次', posts.length - before, 1);
   check('POST 里带新模型', JSON.parse(posts.at(-1).body).model, 'm9');

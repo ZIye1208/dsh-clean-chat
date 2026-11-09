@@ -20,21 +20,42 @@ DSH 里的「侧边对话」和「创建分支」都会把主会话的历史带�
 
 ## 安装
 
-**从本地目录**（开发时）：
+**前置**：已安装 [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar)——本插件把面板注册进它的右侧栏，没有它就只有一个 `console.warn`。
 
 ```powershell
-dsh plugin --profile desktop add H:\path\to\dsh-clean-chat
+dsh plugin --profile desktop add dsh-better-sidebar@latest
 ```
 
-**从 GitHub**：
+### 方式一：插件页添加（推荐，不用记命令）
+
+1. DSH 桌面端 → 左下角**设置** → **插件**
+2. 右上角**添加**，在输入框里填下面任意一种标识：
+   - 本地目录：`H:/dshX/dsh-clean-chat`
+   - GitHub：`github:ZIye1208/dsh-clean-chat`
+   - npm（发布后）：`dsh-clean-chat`
+3. 安装完成后**完全退出 DSH 再打开**（插件在启动时加载，热重载不生效）
+
+> 本仓库目前是 **private**：`github:` 这种方式只有仓库协作者能用。别人要用，得先转公开，或者 `git clone` 到本地按「本地目录」装。
+
+### 方式二：命令行
 
 ```powershell
+# 从本地目录（开发时改完源码立刻生效，桌面端装的是链接不是拷贝）
+dsh plugin --profile desktop add H:/dshX/dsh-clean-chat
+
+# 从 GitHub
 dsh plugin --profile desktop add github:ZIye1208/dsh-clean-chat
 ```
 
-装完**完全退出 DSH 再打开**（插件在启动时加载）。
+装完同样要**完全退出 DSH 再打开**。
 
-依赖：已安装 [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar)（本插件把面板注册进它的右侧栏）。
+### 验证装上了
+
+```powershell
+Select-String -Path "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Pattern "dsh-clean-chat"
+```
+
+`dependencies` 和 `dsh.profile.bundles` 两处都要出现——只进 `dependencies` 不进 `bundles` 的话插件不会激活。
 
 ## 用法
 
