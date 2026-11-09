@@ -77,14 +77,26 @@ Select-String -Path "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Patte
 
 ## 安全模型
 
-宿主路由挂在 `127.0.0.1:<随机端口>` 上，**没有登录态**——DSH 的 `webServer` 这一层不做来源/鉴权策略，所以闸门在插件自己手里：
+宿主路由挂在 `127.0.0.1:<随机端口>` 上，**没有登录态**——DSH 的 `webServer` 这一层不做来源/鉴权策略，所以闸门在插件自己手里。这里说清楚它到底挡住了什么：
 
-- 所有路由（`/chat`、`/models`、`/settings` 读写）**只认同源请求**：`sec-fetch-site: same-origin`；老浏览器没有这个头时退回用 `Origin`/`Referer` 与 `Host` 比对。两者都缺 → `403`。
-  > 早先放行过 `sec-fetch-site: none`，那等于给 `curl`、本机脚本、浏览器扩展开了后门（能刷模型额度、能读走系统提示原文），已修正。
-- `/chat` 只接受**确实存在**的 `provider` / `model` 组合（来自 `llm.listModels`），不接受点名任意模型。
-- 长度超限一律 `413` + 说明，**不再静默截断**；请求体超限回 `413`，不断开连接（断开会让前端只看到 `fetch failed`）。
+| 攻击面 | 挡不挡 | 怎么做 |
+|---|---|---|
+| 局域网 / 其它机器 | ✅ 挡 | socket 必须来自回环地址（`127.0.0.1` / `::1`） |
+| 你访问的网页偷打本机端口（CSRF） | ✅ 挡 | `Origin` 是 http(s) 外站一律 403 |
+| 本机另一个程序 / 脚本 | ❌ 挡不住 | 见下 |
 
-仍需要注意的是：**本机进程**（拿到你用户权限的任何程序）可以读 `settings.json`，也能直接读 DSH 的模型凭据——这一层不是插件能挡的，属于「同机即同权」。系统提示若含私人内容，请自行判断要不要写进去。
+**为什么挡不住本机脚本**：桌面端的请求经过宿主一层转发，实测**没有 `sec-fetch-site`、没有 `Origin`、也没有别的可区分头部**——它跟 `curl` 发出来的东西一模一样。0.6.0 / 0.6.2 都试过从头部辨认，结果是把面板自己挡在门外（模型列表空白、每次发送 403）。与其继续猜，不如承认这条边界：
+
+> 同机即同权。任何拿到你用户权限的程序本来就能读 `~/.dsh` 下的模型凭据和 `settings.json`，插件挡不住它，也不假装挡得住。
+
+对应的补偿措施：
+
+- `/chat` 只接受**确实存在**的 `provider` / `model` 组合（来自 `llm.listModels`），不接受点名任意模型刷账单；
+- 每分钟最多 20 次、同时最多 2 个在途，超了 `429`；
+- 单条 4 万字、总量 20 万字、200 条消息、请求体 1 MiB，超了 `413` 并说明原因，**不静默截断**；
+- 上游报错只回人话 + 错误码，不回传原文（原文可能带 URL / trace / key）。
+
+被 403 时会带原因（例：`已拒绝（Origin 主机不是回环：evil.example.com）`），截图就能定位。
 
 ## 它不带什么
 
@@ -122,6 +134,14 @@ node --check lib/client.js
 | GET | `/clean-chat/api/settings` | 读存盘的设置（文件不存在返回 `{}`） |
 | POST | `/clean-chat/api/settings` | body `{system?, provider?, model?}`，合并写盘，返回完整设置 |
 | POST | `/clean-chat/api/chat` | body `{system?, provider?, model?, messages:[{role,content}]}`，返回 SSE：`start` / `thought` / `delta` / `usage` / `done` / `error` |
+
+脚本调用示例（回环地址就够，不需要任何鉴权头——见「安全模型」）：
+
+```powershell
+$body = @{ messages = @(@{ role = 'user'; content = '你好' }) } | ConvertTo-Json -Depth 5
+Invoke-RestMethod "http://127.0.0.1:<端口>/clean-chat/api/chat" -Method Post `
+  -ContentType 'application/json; charset=utf-8' -Body $body
+```
 
 ## License
 
