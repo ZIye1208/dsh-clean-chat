@@ -51,7 +51,7 @@ function fakeRes() {
 function fakeReq(
   body,
   method = 'POST',
-  headers = { 'x-clean-chat': '1', host: '127.0.0.1:9999' },
+  headers = { 'x-clean-chat': '1', host: '127.0.0.1:9999', 'content-type': 'application/json' },
   remoteAddress = '127.0.0.1',
 ) {
   const req = Readable.from([Buffer.from(JSON.stringify(body))]);
@@ -230,6 +230,17 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   crossSite.headers = { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example.com' };
   const crossOut = await hit(routes.get('/clean-chat/api/chat'), crossSite);
   check('跨站请求 → 403', crossOut.status, 403);
+
+  const blank = await hit(routes.get('/clean-chat/api/chat'), fakeReq({ messages: [{ role: 'user', content: '   ' }] }));
+  check('全空白消息 → 400（不去换一次模型调用）', blank.status, 400);
+
+  const plain = fakeReq(
+    { messages: [{ role: 'user', content: 'hi' }] },
+    'POST',
+    { 'x-clean-chat': '1', host: '127.0.0.1:9999', 'content-type': 'text/plain' },
+  );
+  const plainOut = await hit(routes.get('/clean-chat/api/chat'), plain);
+  check('Content-Type 不是 JSON → 415', plainOut.status, 415);
 }
 
 // ── 7. 没有可用模型 ────────────────────────────────────────────────
