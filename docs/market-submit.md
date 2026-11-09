@@ -15,9 +15,9 @@
 | 6 | 图标是 GitHub 托管的位图 | ✅ | `assets/icon-180.png`（180×180 PNG，非 SVG） |
 | 7 | 一 PR ≤ 3 条 | ✅ | 1 条 |
 
-## 还差的两个前提（都不是改代码能解决的）
+## 还差的前提
 
-1. **仓库必须转公开**：CI 会从仓库读 `package.json` 判断 `dsh.bundle`，private 仓库读不到，直接红。
+1. ~~仓库转公开~~ —— **2026-11-09 18:27 已转公开**（`gh repo edit --visibility public`）。`raw.githubusercontent.com/.../package.json` 与图标 URL 均实测 200。
 2. **等满 24 小时**：未满时 gate 会报「0.x days old」，属于快照结论——到点会自动重跑，不用推空提交。
 
 ## 提交步骤（全程走 GitHub MCP，pwsh 里拿不到 token）
