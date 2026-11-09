@@ -35,3 +35,7 @@
 ## 可选、可以合并后再补
 
 - 截图：在本仓库放 `screenshots.json`（1–8 张相对路径，GitHub 托管），市场夜间构建自动读取，与收录 PR 完全解耦。**注意别把带私人系统提示词的截图放进去。**
+
+## 提交记录
+
+- 2026-11-10：PR https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/13740 —— 只加 data/plugins/ZIye1208__dsh-clean-chat.yml 一个文件；check 与 Submission gate 均通过，mergeable=CLEAN。
