@@ -46,10 +46,11 @@ function fakeRes() {
   return { res, out };
 }
 
-/** 假 req：POST + JSON body。 */
-function fakeReq(body, method = 'POST') {
+/** 假 req：POST + JSON body。默认带同源头（真浏览器 fetch 就是这么发的）。 */
+function fakeReq(body, method = 'POST', headers = { 'sec-fetch-site': 'same-origin', host: '127.0.0.1:9999' }) {
   const req = Readable.from([Buffer.from(JSON.stringify(body))]);
   req.method = method;
+  req.headers = headers;
   return req;
 }
 
@@ -294,6 +295,113 @@ check('bundle patch 存在', pkg.dsh.bundle.patch, './cordis.patch.yml');
   check('坏文件当空设置', JSON.parse(broken.body).settings, {});
 
   rmSync(dir, { recursive: true, force: true });
+}
+
+// ── 9. 来源闸：只认同源，别再放行 none ─────────────────────────────
+{
+  const { ctx, routes } = fakeCtx();
+  resetModelCache();
+  registerRoutes(ctx);
+  const chat = routes.get('/clean-chat/api/chat');
+  const payload = { messages: [{ role: 'user', content: 'hi' }] };
+
+  const noHeaders = fakeReq(payload);
+  noHeaders.headers = undefined;
+  check('没有来源头 → 403', (await hit(chat, noHeaders)).status, 403);
+
+  const noneSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'none' });
+  check('sec-fetch-site: none → 403', (await hit(chat, noneSite)).status, 403);
+  // ↑ 这条就是之前的洞：curl / 脚本 / 浏览器扩展发的请求都长这样。
+
+  const crossSite = fakeReq(payload, 'POST', { 'sec-fetch-site': 'cross-site' });
+  check('sec-fetch-site: cross-site → 403', (await hit(chat, crossSite)).status, 403);
+
+  const originOk = fakeReq(payload, 'POST', { origin: 'http://127.0.0.1:9999', host: '127.0.0.1:9999' });
+  check('老浏览器无 site 头但 Origin 对得上 → 放行', (await hit(chat, originOk)).status, 200);
+
+  const originBad = fakeReq(payload, 'POST', { origin: 'http://evil.example', host: '127.0.0.1:9999' });
+  check('Origin 对不上 → 403', (await hit(chat, originBad)).status, 403);
+
+  const settingsRoute = routes.get('/clean-chat/api/settings');
+  const settingsNoOrigin = fakeReq({}, 'GET');
+  settingsNoOrigin.headers = undefined;
+  check('读设置也要同源', (await hit(settingsRoute, settingsNoOrigin)).status, 403);
+
+  const modelsNoOrigin = fakeReq({}, 'GET');
+  modelsNoOrigin.headers = { 'sec-fetch-site': 'none' };
+  check('列模型也要同源', (await hit(routes.get('/clean-chat/api/models'), modelsNoOrigin)).status, 403);
+}
+
+// ── 10. 长度超限：说清楚，不再静默截断 ──────────────────────────────
+{
+  const { ctx, routes } = fakeCtx();
+  resetModelCache();
+  registerRoutes(ctx);
+  const chat = routes.get('/clean-chat/api/chat');
+
+  const longOne = await hit(
+    chat,
+    fakeReq({ messages: [{ role: 'user', content: 'a'.repeat(40_001) }] }),
+  );
+  check('单条超 4 万 → 413', longOne.status, 413);
+  check('413 里说明了长度', /40,001|超过/.test(JSON.parse(longOne.body).error), true);
+
+  const longSystem = await hit(
+    chat,
+    fakeReq({ system: 'x'.repeat(8_001), messages: [{ role: 'user', content: 'hi' }] }),
+  );
+  check('系统提示超 8000 → 413', longSystem.status, 413);
+
+  const longTotal = await hit(
+    chat,
+    fakeReq({
+      messages: [
+        { role: 'user', content: 'a'.repeat(39_000) },
+        { role: 'assistant', content: 'b'.repeat(39_000) },
+        { role: 'user', content: 'c'.repeat(39_000) },
+        { role: 'assistant', content: 'd'.repeat(39_000) },
+        { role: 'user', content: 'e'.repeat(39_000) },
+        { role: 'assistant', content: 'f'.repeat(6_000) },
+        { role: 'user', content: 'tail' },
+      ],
+    }),
+  );
+  check('总量超 20 万 → 413', longTotal.status, 413);
+}
+
+// ── 11. 请求体过大：给 413，不是连接重置 ────────────────────────────
+{
+  const { ctx, routes } = fakeCtx();
+  resetModelCache();
+  registerRoutes(ctx);
+  const huge = fakeReq({ messages: [{ role: 'user', content: 'a'.repeat(1_100_000) }] });
+  const out = await hit(routes.get('/clean-chat/api/chat'), huge);
+  check('请求体超 1 MiB → 413', out.status, 413);
+  check('413 里不出现 ECONNRESET 之类黑话', /1 MiB|太大/.test(JSON.parse(out.body).error), true);
+}
+
+// ── 12. 模型白名单：不许点名不存在的模型 ────────────────────────────
+{
+  const { ctx, routes } = fakeCtx({
+    providers: [{ id: 'p1', models: [{ id: 'cheap' }] }],
+    selection: { provider: 'p1', model: 'cheap' },
+  });
+  resetModelCache();
+  registerRoutes(ctx);
+  const chat = routes.get('/clean-chat/api/chat');
+
+  const bad = await hit(
+    chat,
+    fakeReq({ provider: 'p1', model: 'expensive', messages: [{ role: 'user', content: 'hi' }] }),
+  );
+  check('点了不存在的模型 → 400', bad.status, 400);
+  check('400 里说模型不可用', /模型不可用/.test(JSON.parse(bad.body).error), true);
+
+  const good = await hit(
+    chat,
+    fakeReq({ provider: 'p1', model: 'cheap', messages: [{ role: 'user', content: 'hi' }] }),
+  );
+  check('点存在的模型 → 200', good.status, 200);
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);

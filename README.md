@@ -54,6 +54,17 @@ dsh plugin --profile desktop add github:ZIye1208/dsh-clean-chat
 
 **设置的存放位置**：系统提示 / 模型选择存在宿主磁盘 `~/.dsh/storages/clean-chat/settings.json`（只这三个字段），所以重启后还在。不存 `localStorage` 是有原因的：DSH 的 GUI 端口每次启动都变，而 `localStorage` 按 origin 隔离，靠它等于每次重启就换一份存储。`localStorage` 只当兜底缓存——宿主拿不到时用，恢复到宿主后自动迁回去。
 
+## 安全模型
+
+宿主路由挂在 `127.0.0.1:<随机端口>` 上，**没有登录态**——DSH 的 `webServer` 这一层不做来源/鉴权策略，所以闸门在插件自己手里：
+
+- 所有路由（`/chat`、`/models`、`/settings` 读写）**只认同源请求**：`sec-fetch-site: same-origin`；老浏览器没有这个头时退回用 `Origin`/`Referer` 与 `Host` 比对。两者都缺 → `403`。
+  > 早先放行过 `sec-fetch-site: none`，那等于给 `curl`、本机脚本、浏览器扩展开了后门（能刷模型额度、能读走系统提示原文），已修正。
+- `/chat` 只接受**确实存在**的 `provider` / `model` 组合（来自 `llm.listModels`），不接受点名任意模型。
+- 长度超限一律 `413` + 说明，**不再静默截断**；请求体超限回 `413`，不断开连接（断开会让前端只看到 `fetch failed`）。
+
+仍需要注意的是：**本机进程**（拿到你用户权限的任何程序）可以读 `settings.json`，也能直接读 DSH 的模型凭据——这一层不是插件能挡的，属于「同机即同权」。系统提示若含私人内容，请自行判断要不要写进去。
+
 ## 它不带什么
 
 - 不带工具：模型不能读文件、不能搜索、不能执行命令（要它看东西，自己粘贴进去）。

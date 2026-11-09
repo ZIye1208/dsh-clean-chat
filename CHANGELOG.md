@@ -8,6 +8,22 @@
 
 （暂无）
 
+## [0.5.1] - 2026-11-09
+
+### 安全
+
+- **修**：`sec-fetch-site: none` 不再放行。此前 `isSameOrigin()` 允许 `none`，而 `curl`、本机脚本、浏览器扩展发的请求正好都是这个值——等于本机任意进程都能调 `/chat` 刷模型额度、读 `/settings` 拿走系统提示原文。现在只认 `same-origin`；没有该头时退回 `Origin`/`Referer` 与 `Host` 比对，两者都缺即 `403`。`/models`、`/settings` 读写同样加上这道闸。
+- **修**：`/chat` 只接受 `llm.listModels` 里确实存在的 `provider` / `model` 组合（模型清单为空时不做此限制，避免 `listModels` 抖动导致不可用）。此前可点名任意模型，配合上一条就是账单放大器。
+
+### 修复
+
+- **修**：单条消息超 4 万字不再**静默截断**——实测 21 万字符的请求曾返回 `200` 并只发前 4 万，用户完全不知道内容被砍。现在回 `413` 并说明字数与上限；系统提示超 8000 字同样 `413`。
+- **修**：请求体超限不再 `req.destroy()` 断开连接（前端只会看到 `fetch failed`）。上限从 512 KiB 提到 1 MiB（20 万中文字符按 UTF-8 约 600 KB，原来中文永远先撞字节闸、那个 413 中文提示形同虚设），超限时正常回 `413`。
+
+### 测试
+
+- 新增来源闸 7 项（无头 / `none` / `cross-site` / Origin 匹配 / Origin 不匹配 / 设置与模型路由）、长度超限 5 项、请求体超限 2 项、模型白名单 3 项。unit 57、client 54、render 11。
+
 ## [0.5.0] - 2026-11-09
 
 ### 修复
@@ -109,7 +125,8 @@
 
 - 首个版本：侧栏「闲聊」tab，直连 `ctx.llm.stream`，零工具、零会话上下文、历史只在内存。
 
-[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ZIye1208/dsh-clean-chat/compare/v0.4.0...v0.4.1
