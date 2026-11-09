@@ -1,0 +1,7 @@
+url: https://github.com/ZIye1208/dsh-clean-chat
+name: ZIye1208/dsh-clean-chat
+category: ui
+icon: https://raw.githubusercontent.com/ZIye1208/dsh-clean-chat/main/assets/icon-180.png
+description:
+  en: "Adds a clean chat panel to the right sidebar: it sends only a one-line system prompt and the messages you type, with no tools and no DSH session context, and keeps the history in memory. Each reply shows its own token usage and cache hit rate."
+  zh: "在右侧栏加一个干净对话面板：只发一句系统提示和你在面板里输入的消息，不带任何工具、也不读 DSH 会话上下文，历史只存在内存里。每条回复下方显示本轮 token 用量与缓存命中。"
