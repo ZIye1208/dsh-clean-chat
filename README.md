@@ -3,6 +3,7 @@
 给 DSH 侧栏加一格**干净对话**：不给工具、不带会话上下文、不建会话文件——像网页版那样，只是问一句、答一句。
 
 ![tab](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue) ![npm](https://img.shields.io/npm/v/dsh-clean-chat) ![license](https://img.shields.io/badge/license-MIT-green)
+<img width="1153" height="1330" alt="2" src="https://github.com/user-attachments/assets/dba6e1e9-9ea7-4d9c-85ed-42af44b39972" />
 
 ## 它解决的问题
 
