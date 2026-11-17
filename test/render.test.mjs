@@ -104,5 +104,73 @@ const mdHtml = renderToStaticMarkup(React.createElement('div', null, markdown));
 check('Markdown 渲染出 strong', mdHtml.includes('<strong>粗</strong>'), true);
 check('Markdown 渲染出 code', mdHtml.includes('<code>x</code>'), true);
 
+// ── 4. 排版：标题分级 / 分隔线 ─────────────────────────────────────
+const typo = renderToStaticMarkup(
+  React.createElement(
+    'div',
+    null,
+    mod.__internals.renderMarkdown('# 一\n\n## 二\n\n### 三\n\n#### 四\n\n---\n\n段落\n', 't'),
+  ),
+);
+check('h1 渲染', typo.includes('<h1 class="cc-h1">'), true);
+check('h2 渲染', typo.includes('<h2 class="cc-h2">'), true);
+check('h4 渲染', typo.includes('<h4 class="cc-h4">'), true);
+check('分隔线渲染', typo.includes('class="cc-hr"'), true);
+
+// ── 5. 代码块 banner：语言名 + 复制按钮 ────────────────────────────
+const codeHtml = renderToStaticMarkup(
+  React.createElement(
+    'div',
+    null,
+    mod.__internals.renderMarkdown('```python\nprint(1)\n```\n', 'c'),
+  ),
+);
+check('代码块外框', codeHtml.includes('class="cc-code"'), true);
+check('语言名显示', codeHtml.includes('>python<'), true);
+check('复制按钮存在', codeHtml.includes('cc-code-copy'), true);
+check('代码正文', codeHtml.includes('print(1)'), true);
+// 没写语言的围栏退回中性标签，不能是空白
+const noLang = renderToStaticMarkup(
+  React.createElement('div', null, mod.__internals.renderMarkdown('```\nx\n```\n', 'n')),
+);
+check('无语言退回 text 标签', noLang.includes('>text<'), true);
+
+// ── 6. 思考区：全文展示 + 用时 ──────────────────────────────────────
+const longThought = 'A'.repeat(1200) + 'TAIL-MARKER';
+const thinkHtml = renderToStaticMarkup(
+  React.createElement(
+    'div',
+    null,
+    mod.__internals.renderMarkdown('正文', 'x'),
+  ),
+);
+check('普通正文能渲染', thinkHtml.includes('正文'), true);
+// 直接验 thoughtLabel + 组件里没有截断：拿真实组件渲染一条带长思考的助手消息
+{
+  const internals = mod.__internals;
+  const store = internals.store;
+  const saved = store.messages.slice();
+  store.messages.length = 0;
+  store.messages.push(
+    { role: 'user', content: '问', usage: null, route: null, thought: '' },
+    {
+      role: 'assistant',
+      content: '答',
+      usage: null,
+      route: null,
+      thought: longThought,
+      thoughtStart: 1000,
+      thoughtEnd: 3400,
+    },
+  );
+  store.streaming = false;
+  const withThought = renderToStaticMarkup(React.createElement(ChatTab));
+  check('思考区显示全文（不再截断）', withThought.includes('TAIL-MARKER'), true);
+  check('思考区显示用时', withThought.includes('思考过程 · 2s'), true);
+  check('思考区没有 600 字截断痕迹', withThought.length > longThought.length, true);
+  store.messages.length = 0;
+  saved.forEach((message) => store.messages.push(message));
+}
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);

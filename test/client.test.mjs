@@ -23,6 +23,7 @@ const fakeReact = {
   useState: (initial) => [initial, () => {}],
   useRef: (initial) => ({ current: initial }),
   useEffect: () => {},
+  useLayoutEffect: () => {},
   useReducer: (reducer, initial) => [initial, () => {}],
 };
 
@@ -149,6 +150,28 @@ check('只 require react', /require\((?!'react'\))/.test(source.replace(/require
 check('没有字符串 style', /style\s*:\s*'/.test(source), false);
 check('没有字符串 style（双引号）', /style\s*:\s*"/.test(source), false);
 
+// ── 样式与结构的静态防回归 ──────────────────────────────────────────
+// 排版换成 DSH 令牌后，字号必须跟着宿主走；写死 14px 就等于用户改字号时这里不跟。
+check('根容器跟随内容字号', source.includes('font-size:var(--dsh-content-font-size,14px)'), true);
+check('正文行高跟随字号增量', source.includes('var(--dsh-content-font-delta,0px)'), true);
+// 粘底依赖这层包裹：删掉它 ResizeObserver 就没有可观察的内容节点了。
+check('滚动容器内有内容层', source.includes("className: 'cc-column'"), true);
+check('内容层有样式', source.includes('.cc-column{'), true);
+check('用 ResizeObserver 而不是 effect 贴底', source.includes('new ResizeObserver('), true);
+check('用户上翻可以解除跟随', source.includes('stickyRef.current = false'), true);
+// 思考区曾经被按末尾 600 字截断，开头的那半段静默消失
+check('思考区不再截断', /thought\.slice\(|slice\(-600\)/.test(source), false);
+check('思考中有扫光动效', source.includes('@keyframes cc-shimmer'), true);
+// 代码块能力
+check('代码块有头部条', source.includes('.cc-code-head{'), true);
+check('代码块有复制按钮样式', source.includes('.cc-code-copy'), true);
+// 弹层改成 fixed + 自算坐标，否则会被 .cc-list 的 overflow 裁掉
+check('用量弹层用 fixed', /\.cc-usage-pop\{[^}]*position:fixed/.test(source), true);
+check('弹层坐标是算出来的', source.includes('computePopoverPlacement('), true);
+// 输入框自增高：镜像撑高度 + 绝对定位的 textarea
+check('输入框有镜像层', source.includes('cc-ta-mirror'), true);
+check('textarea 绝对定位铺满', /\.cc-input textarea\{position:absolute/.test(source), true);
+
 // ── 纯函数：数字格式 ────────────────────────────────────────────────
 const { fmtTok, usageOf, usageLine, fmtPercent, fmtExact, TurnUsage, renderMarkdown } = mod.__internals;
 check('fmtTok 999', fmtTok(999), '999');
@@ -192,15 +215,69 @@ check('没有 usage 时不渲染', TurnUsage({ item: { usage: null } }), null);
 
 // ── 纯函数：Markdown 块级结构 ──────────────────────────────────────
 const tree = renderMarkdown('# 标题\n\n第一段**粗**和`码`。\n\n- a\n- b\n\n```js\nconst x = 1;\n```\n', 'k');
-const kinds = tree.map((node) => node.type);
+/** 组件节点的 type 是函数，序列化会变 null，这里归一成名字方便断言。 */
+const kindOf = (node) => (typeof node.type === 'function' ? node.type.name : node.type);
+const kinds = tree.map(kindOf);
 /** 把「一个数组子节点」摊平（假 React 不展开数组，真 React 会）。 */
 const flat = (node) => ([]).concat(...node.children.map((child) => (Array.isArray(child) ? child : [child])));
-check('markdown 块序列', kinds, ['h3', 'p', 'ul', 'pre']);
+check('markdown 块序列', kinds, ['h1', 'p', 'ul', 'CodeBlock']);
+check('h1 类名', tree[0].props.className, 'cc-h1');
 check('列表两项', flat(tree[2]).length, 2);
-check('代码块内容', tree[3].children[0].children[0], 'const x = 1;');
+check('代码块内容', tree[3].props.code, 'const x = 1;');
+check('代码块语言', tree[3].props.lang, 'js');
 check('粗体节点', flat(tree[1]).some((child) => child && child.type === 'strong'), true);
 check('行内码节点', flat(tree[1]).some((child) => child && child.type === 'code'), true);
 check('空文本不炸', renderMarkdown('', 'z').length, 0);
+
+// 标题分级：## → h2、#### → h4（以前所有标题都被硬当 h3）
+check(
+  '标题分级',
+  renderMarkdown('## 二\n\n### 三\n\n#### 四\n', 'h').map((node) => node.type),
+  ['h2', 'h3', 'h4'],
+);
+// 分隔线（以前完全没实现，--- 会被当成列表或段落）
+check('分隔线', renderMarkdown('a\n\n---\n\nb\n', 'r').map((node) => node.type), ['p', 'hr', 'p']);
+check('分隔线类名', renderMarkdown('---\n', 'r2')[0].props.className, 'cc-hr');
+
+// ── 纯函数：弹层定位 ────────────────────────────────────────────────
+{
+  const place = mod.__internals.computePopoverPlacement;
+  const view = { width: 1000, height: 800 };
+  // 空间充足：贴下方，左边缘与锚点对齐
+  check('弹层默认下方', place({ top: 100, bottom: 120, left: 300 }, { width: 240, height: 200 }, view), {
+    top: 126,
+    left: 300,
+    width: 240,
+    placement: 'down',
+  });
+  // 右边放不下：整体左移，但不越过左边界
+  check('弹层右侧收进视口', place({ top: 100, bottom: 120, left: 900 }, { width: 240, height: 200 }, view).left, 752);
+  check(
+    '弹层左侧不越界',
+    place({ top: 100, bottom: 120, left: 2 }, { width: 240, height: 200 }, view).left,
+    8,
+  );
+  // 下边放不下、上方放得下：翻到上方
+  check('弹层向上翻面', place({ top: 700, bottom: 720, left: 100 }, { width: 240, height: 200 }, view), {
+    top: 494,
+    left: 100,
+    width: 240,
+    placement: 'up',
+  });
+  // 上下都放不下：贴顶，交给 max-height 滚动
+  check('弹层超高贴顶', place({ top: 400, bottom: 420, left: 100 }, { width: 240, height: 780 }, view).top, 8);
+  // 比视口还宽的弹层：宽度收进视口
+  check('弹层超宽收窄', place({ top: 10, bottom: 30, left: 0 }, { width: 2000, height: 100 }, view).width, 984);
+}
+
+// ── 纯函数：思考区标题 ──────────────────────────────────────────────
+{
+  const label = mod.__internals.thoughtLabel;
+  check('思考中', label({ thoughtStart: 1, thoughtEnd: 0 }, true), '正在思考…');
+  check('思考用时', label({ thoughtStart: 1000, thoughtEnd: 3400 }, false), '思考过程 · 2s');
+  check('不足 1 秒按 1 秒', label({ thoughtStart: 1000, thoughtEnd: 1200 }, false), '思考过程 · 1s');
+  check('没有打点信息', label({}, false), '思考过程');
+}
 
 // ── 设置持久化：宿主写盘为准，localStorage 只当缓存 ─────────────────
 {

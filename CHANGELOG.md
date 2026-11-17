@@ -10,6 +10,34 @@
 
 - 缓存命中率的措辞与实际行为对齐：命中率只在**返回缓存统计的路由**上显示；网关型路由不返回该字段时，面板只说「本轮无缓存命中」，而不会编一个 0%。README 与市场条目描述同步改写（原写法「每条回复都显示缓存命中」略绝对）。
 
+## [1.1.0] - 2026-11-17
+
+对齐 DSH 主界面的排版规格，并修掉三处流式交互问题。设计令牌取自 `@deepseek-ai/dsh-client-ui-theme`，与主界面同源，所以主题换肤、字号设置都会自动跟随。
+
+### 新增
+
+- **Markdown 排版换成 DSH 令牌**：正文 14px / 行高 `calc(24px + delta)`（跟着宿主的「内容字号」设置走，不再写死）；`h1/h2/h3/h4` 分别是 21/19/18/14px，行高 30/28/26/24，字重 700/700/700/600 —— 以前所有标题都被硬当 `h3`、字号一律 14px，等于没有层级。
+- **块级元素补齐**：段落 `margin:16px 0`、列表 `margin:16px 0` + `padding-left:18px`、`li:not(:first-child){margin-top:6px}`、`li::marker` 用 `label-secondary`、引用 `border-left:2px` + `padding-left:14px`、新增分隔线 `hr`（`height:.5px`、`margin:32px 0`）；链接改用 `--dsw-alias-link`（以前误用 `brand-primary`），悬停点线。
+- **代码块头部条**：显示围栏语言名（没写显示 `text`）+ 复制按钮，复制成功原地变「已复制」并 1.2 秒后复原；代码块字号 11px、行内码 12px，都跟随 `--dsh-code-font-delta`。
+- **思考区用时**：标题变成「思考过程 · 3s」，思考进行中显示「正在思考…」并套一层扫光动画（`prefers-reduced-motion` 下自动关闭）。
+- **输入框自增高**：隐藏镜像层撑高度、textarea 绝对定位铺满，1~8 行之间自然伸缩，超过后内部滚动。纯 CSS，不读 `scrollHeight`，所以没有边打字边抖。
+
+### 修复
+
+- **流式回答时视口不跟随**：原来的贴底 effect 依赖 `[messages, length, streaming]`，而流式过程只改 `reply.content`，三个依赖都不变 —— effect 根本不跑，回答越长视口越停在上次的位置。改为 `ResizeObserver` 观察内容层 + 只在用户主动上翻时解除跟随（距底小于 40px 自动恢复）。
+- **思考区被截断**：`slice(-600)` 只留末尾 600 字，长思考的开头静默消失。改为全文展示，用 `max-height:260px` + 内部滚动控制高度。
+- **用量弹层跑到视口外**：原来是 `position:absolute`，会被 `.cc-list` 的 `overflow-y:auto` 裁掉，第一轮消息把弹层顶穿面板。改为 `position:fixed` + 自算坐标（贴锚点下方、与左边缘对齐，右边放不下整体左移，下边放不下翻到上方，上下都放不下贴顶滚动），并监听 `resize` 与捕获阶段的 `scroll` 跟随移动。
+
+### 测试
+
+- `test/client.test.mjs`：60 → 89 项。新增弹层定位纯函数 6 组边界（默认下方 / 右侧收进 / 左侧不越界 / 向上翻面 / 超高贴顶 / 超宽收窄）、思考区标题 4 种状态、标题分级与 `hr` 的块序列，以及 15 条样式静态防回归断言（令牌用法、`cc-column` 存在、`ResizeObserver`、`slice(-600)` 不得复现、fixed 弹层、镜像层）。
+- `test/render.test.mjs`：11 → 24 项。真 React 渲染校验 `h1/h2/h4` 类名、`hr`、代码块头部条与语言名、无语言时退回 `text`、1200 字思考全文与「思考过程 · 2s」。
+- `test/unit.test.mjs` 76 项不变。
+
+### 说明
+
+- **没有做流式节流**。实测 3000 字 / 1000 delta 累计 633ms，12000 字 / 4000 delta 累计 11549ms；但按「单次渲染耗时×2」推算的节流窗口只有约 21ms，比 delta 间隔（30–60ms）还短，一次也省不掉。真要治长回答的 O(n²)，得按块缓存 vnode，那是另一件事。
+
 ## [1.0.0] - 2026-11-09
 
 首个稳定版。此前的 0.1.0–0.8.1 是快速迭代期，未单独打 tag。
@@ -261,6 +289,7 @@
 
 0.1.0–0.8.1 为 1.0.0 之前的迭代，未单独打 tag。
 
-[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ZIye1208/dsh-clean-chat/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ZIye1208/dsh-clean-chat/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ZIye1208/dsh-clean-chat/releases/tag/v1.0.0
 

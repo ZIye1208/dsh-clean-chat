@@ -80,10 +80,12 @@ Select-String -Path "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Patte
 - 左上角下拉选模型，按 provider 分组；默认「默认模型」（即设置里的默认模型）
 - 「提示」改系统提示（默认 `You are a helpful assistant.`，留空则完全不带系统提示）
 - 「清空」丢弃这段对话
-- Enter 发送，Shift+Enter 换行；生成中可以「停止」
-- 回复支持轻量 Markdown：代码块、列表、标题、引用、粗体、行内码、链接
+- Enter 发送，Shift+Enter 换行；输入框随内容长到 8 行，再多就在框内滚动；生成中可以「停止」
+- 回复支持轻量 Markdown：代码块（带语言名和复制按钮）、列表、分级标题、引用、分隔线、粗体、行内码、链接
+- 排版规格跟主界面同一套令牌，所以在设置里调「内容字号」时，这里的正文、标题、代码字号会一起变
 - 每条回复下面有胶囊 `用量 2.0K`，点开看明细：提供方 / 模型、未缓存输入、输出，**路由返回缓存统计时**再加缓存命中 / 缓存读取 / 缓存写入（跟主界面的「本轮用量」同一套字段与口径）；顶栏是这段对话的累计
-- 思考过程默认折叠，点「▸ 思考过程」展开
+- 思考过程默认折叠，点「▸ 思考过程 · 3s」展开（进行中显示「正在思考…」）；全文都在，不限字数
+- 流式输出时视口自动贴底；手动往上翻就停止跟随，滚回底部附近（40px）自动恢复
 
 > 缓存这一项看路由：DeepSeek 官方路由（`deepseek-official` / `deepseek-account`）会返回 `cacheReadTokens`，面板据此显示命中率；网关型路由（如 `opencode-go`）不返回缓存统计，面板就不显示命中率、只说这一轮没有缓存命中，不会凭空编一个 0% 出来。就算是官方路由，也只能命中**完全相同的长前缀**——同一句话问第二次才会看到命中。
 
@@ -124,6 +126,7 @@ Select-String -Path "$env:USERPROFILE\.dsh\profiles\desktop\package.json" -Patte
 
 - DSH `0.2.2-rc.1`（桌面端）实测可用；要求宿主暴露 `webServer` 与 `llm` 服务。
 - 面板走宿主原生右侧栏（`ctx.sidebarRightTabs.register` + `ctx.slots.inject('sidebar.right.pane.tab', …)`）；宿主没有该服务时只警告、不注册界面（host 路由仍可访问）。
+- 排版依赖 `@deepseek-ai/dsh-client-ui-theme` 提供的 CSS 变量（`--dsh-content-font-size` / `--dsw-alias-*`）。宿主没给的时候每个变量都有回退值，不会变成无样式裸文本。
 
 ## 开发
 
